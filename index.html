@@ -390,7 +390,7 @@
   ];
 
   const PALETTE = ['#B5651D', '#4F7CAC', '#8F5B8C', '#5A8F6A', '#C2A03A', '#A64B4B', '#3E8E8E', '#7A7F3A', '#6C6FB0', '#8C7B6B', '#B0577A'];
-  const DEFAULT_TIERS = ['Forever', 'Keepers', 'Fine', 'Skip'];
+  const DEFAULT_TIERS = ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'];
   const STORE = 'nk-tier-sorter-v1';
   const slugOf = (s) => String(s).toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const baseFlat = BASE.flatMap((a) => a.songs.map((t) => ({ id: slugOf(a.album) + '::' + slugOf(t) })));
