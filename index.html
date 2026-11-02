@@ -62,13 +62,28 @@
   .sub { margin: 6px 0 0; color: var(--ink-soft); max-width: 46ch; }
 
   .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
-  .raters { display: flex; align-items: center; gap: 8px; }
+  .raters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .rater-list { display: flex; flex-wrap: wrap; gap: 8px; }
   .raters .lbl { color: var(--ink-soft); font-size: .9rem; }
   .rater {
+    display: flex;
+    align-items: center;
     border: 2px solid var(--ink);
     border-radius: 999px;
     cursor: pointer;
   }
+  .rater-x {
+    font: inherit;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: var(--fog);
+    background: transparent;
+    border: 0;
+    padding: 4px 10px 6px 0;
+    cursor: pointer;
+  }
+  .rater-x:focus-visible { outline: 2px solid var(--blaze); outline-offset: 1px; border-radius: 999px; }
+  .btn.small { font-size: .85rem; padding: 5px 11px; }
   .rater.on { background: var(--ink); }
   .rater input {
     font: inherit;
@@ -312,8 +327,8 @@
   <div class="controls">
     <div class="raters" role="group" aria-label="Whose results you are sorting">
       <span class="lbl">Sorting as</span>
-      <div class="rater" data-i="0"><input type="text" maxlength="16" aria-label="Name of person 1"></div>
-      <div class="rater" data-i="1"><input type="text" maxlength="16" aria-label="Name of person 2"></div>
+      <div class="rater-list" id="raterList"></div>
+      <button type="button" class="btn small" id="addPersonBtn">Add person</button>
     </div>
     <div class="actions">
       <button type="button" class="btn primary" id="exportBtn">Export CSV</button>
@@ -382,7 +397,7 @@
     { album: 'Cape Elizabeth EP', year: 2020, songs: ['A Troubled Mind', 'Close Behind', 'Glue Myself Shut', 'Anyway', 'Maine'] },
     { album: 'I Was / I Am', year: 2021, songs: ['Part of Me', 'Animal', 'Caves', 'Bad Luck', 'Godlight', 'Someone Like You', 'Fear of Water', 'Hollow', 'Bury Me', 'Howling'] },
     { album: 'Stick Season', year: 2022, songs: ['Northern Attitude', 'Stick Season', 'All My Love', 'She Calls Me Back', 'Come Over', 'New Perspective', 'Everywhere, Everything', 'Orange Juice', 'Strawberry Wine', 'Growing Sideways', 'Halloween', 'Homesick', 'Still', 'The View Between Villages'] },
-    { album: 'Stick Season (We’ll All Be Here Forever)', year: 2023, songs: ['Your Needs, My Needs', 'Dial Drunk', 'Paul Revere', 'No Complaints', 'Call Your Mom', 'You’re Gonna Go Far', 'The View Between Villages [extended]']},
+    { album: 'Stick Season (We’ll All Be Here Forever)', year: 2023, songs: ['Your Needs, My Needs', 'Dial Drunk', 'Paul Revere', 'No Complaints', 'Call Your Mom', 'You’re Gonna Go Far', 'The View Between Villages [extended]'] },
     { album: 'Stick Season (Forever)', year: 2024, songs: ['Forever'] },
     { album: 'The Great Divide', year: 2026, songs: ['End of August', 'Doors', 'American Cars', 'Downfall', 'Paid Time Off', 'The Great Divide', 'Haircut', 'Willing and Able', 'Dashboard', '23', 'Porch Light', 'Deny Deny Deny', 'Headed North', 'We Go Way Back', 'Spoiled', 'All Them Horses', 'Dan'] },
     { album: 'The Great Divide: The Last of the Bugs', year: 2026, songs: ['Lighthouse', 'Staying Still', 'A Few of Your Own', 'Orbiter'] },
@@ -391,22 +406,27 @@
 
   const PALETTE = ['#B5651D', '#4F7CAC', '#8F5B8C', '#5A8F6A', '#C2A03A', '#A64B4B', '#3E8E8E', '#7A7F3A', '#6C6FB0', '#8C7B6B', '#B0577A'];
   const DEFAULT_TIERS = ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'];
+  const LEGACY_TIERS = ['Forever', 'Keepers', 'Fine', 'Skip']; // names from an earlier version of this page
   const STORE = 'nk-tier-sorter-v1';
+  const MAX_PEOPLE = 5;
   const slugOf = (s) => String(s).toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const baseFlat = BASE.flatMap((a) => a.songs.map((t) => ({ id: slugOf(a.album) + '::' + slugOf(t) })));
 
   /* ---------- State ---------- */
   function defaults() {
-    return { raters: [{ name: 'You' }, { name: 'Friend' }], active: 0, tiers: DEFAULT_TIERS.slice(), place: [{}, {}], custom: [] };
+    return { raters: [{ name: 'You' }, { name: 'Friend' }], active: 0, tiers: [null, null, null, null], place: [{}, {}], custom: [] };
   }
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(STORE));
-      if (s && Array.isArray(s.raters) && s.raters.length === 2 && Array.isArray(s.place) && s.place.length === 2) {
+      if (s && Array.isArray(s.raters) && s.raters.length >= 1 && s.raters.length <= MAX_PEOPLE && Array.isArray(s.place) && s.place.length === s.raters.length) {
         const d = defaults();
         const merged = Object.assign(d, s);
-        if (!Array.isArray(merged.tiers) || merged.tiers.length !== 4) merged.tiers = DEFAULT_TIERS.slice();
+        if (!Array.isArray(merged.tiers) || merged.tiers.length !== 4) merged.tiers = [null, null, null, null];
+        // Saved names that match an old default count as 'not customized', so DEFAULT_TIERS applies.
+        merged.tiers = merged.tiers.map((v, i) => (typeof v !== 'string' || v === LEGACY_TIERS[i]) ? null : v);
         if (!Array.isArray(merged.custom)) merged.custom = [];
+        if (!(merged.active >= 0 && merged.active < merged.raters.length)) merged.active = 0;
         return merged;
       }
     } catch (e) { /* fall through */ }
@@ -449,7 +469,7 @@
   }
 
   const nameOf = (i) => state.raters[i].name.trim() || ('Person ' + (i + 1));
-  const tierName = (t) => state.tiers[t - 1].trim() || DEFAULT_TIERS[t - 1];
+  const tierName = (t) => (state.tiers[t - 1] || '').trim() || DEFAULT_TIERS[t - 1];
 
   /* ---------- Build static DOM ---------- */
   function initDOM() {
@@ -474,13 +494,7 @@
         renderSendbar();
       });
     }
-    document.querySelectorAll('.rater').forEach((el) => {
-      const i = Number(el.dataset.i);
-      const input = el.querySelector('input');
-      input.addEventListener('input', () => { state.raters[i].name = input.value; save(); renderStatus(); renderSendbar(); });
-      el.addEventListener('click', () => setActive(i));
-      input.addEventListener('focus', () => setActive(i));
-    });
+    buildRaters();
     refreshAlbumSelect();
   }
 
@@ -499,6 +513,74 @@
       sel.appendChild(o);
     }
     if (keep) sel.value = keep;
+  }
+
+  function buildRaters() {
+    const list = $('#raterList');
+    list.replaceChildren();
+    state.raters.forEach((r, i) => {
+      const el = document.createElement('div');
+      el.className = 'rater';
+      el.dataset.i = String(i);
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.maxLength = 16;
+      input.setAttribute('aria-label', 'Name of person ' + (i + 1));
+      input.addEventListener('input', () => {
+        state.raters[i].name = input.value;
+        save();
+        renderStatus();
+        renderSendbar();
+      });
+      input.addEventListener('focus', () => setActive(i));
+      el.addEventListener('click', () => setActive(i));
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'rater-x';
+      x.textContent = '×';
+      x.addEventListener('click', (e) => { e.stopPropagation(); removePerson(i); });
+      el.appendChild(input);
+      el.appendChild(x);
+      list.appendChild(el);
+    });
+    $('#addPersonBtn').hidden = state.raters.length >= MAX_PEOPLE;
+    updateRaters();
+  }
+
+  function updateRaters() {
+    document.querySelectorAll('.rater').forEach((el) => {
+      const i = Number(el.dataset.i);
+      const on = i === state.active;
+      el.classList.toggle('on', on);
+      const input = el.querySelector('input');
+      if (document.activeElement !== input) input.value = state.raters[i].name;
+      const x = el.querySelector('.rater-x');
+      x.hidden = !(on && state.raters.length > 1);
+      x.setAttribute('aria-label', 'Remove ' + nameOf(i));
+    });
+  }
+
+  function addPerson(name) {
+    state.raters.push({ name });
+    state.place.push({});
+    return state.raters.length - 1;
+  }
+
+  function removePerson(i) {
+    const n = Object.keys(state.place[i]).length;
+    const msg = n
+      ? 'Remove ' + nameOf(i) + ' and their ' + n + ' sorted songs? This can’t be undone.'
+      : 'Remove ' + nameOf(i) + '?';
+    if (!window.confirm(msg)) return;
+    const gone = nameOf(i);
+    state.raters.splice(i, 1);
+    state.place.splice(i, 1);
+    state.active = Math.max(0, Math.min(state.active, state.raters.length - 1));
+    selected = null;
+    save();
+    buildRaters();
+    render();
+    note('Removed ' + gone + '.');
   }
 
   function setActive(i) {
@@ -525,12 +607,7 @@
   function render() {
     const place = state.place[state.active];
 
-    document.querySelectorAll('.rater').forEach((el) => {
-      const i = Number(el.dataset.i);
-      el.classList.toggle('on', i === state.active);
-      const input = el.querySelector('input');
-      if (document.activeElement !== input) input.value = state.raters[i].name;
-    });
+    updateRaters();
 
     for (let t = 1; t <= 4; t++) {
       const bin = $('#bin' + t);
@@ -538,7 +615,7 @@
       bin.querySelector('.bin-body').replaceChildren(...items.map(chip));
       bin.querySelector('.count').textContent = items.length;
       const input = bin.querySelector('.bin-name');
-      if (document.activeElement !== input) input.value = state.tiers[t - 1];
+      if (document.activeElement !== input) input.value = state.tiers[t - 1] === null ? DEFAULT_TIERS[t - 1] : state.tiers[t - 1];
     }
 
     const list = $('#poolList');
@@ -577,14 +654,22 @@
     $('#progress').textContent = done + ' of ' + songs.length + ' songs sorted for ' + nameOf(state.active);
     $('#barFill').style.width = (songs.length ? (done / songs.length) * 100 : 0) + '%';
 
-    let both = 0, same = 0;
-    songs.forEach((s) => {
-      const a = state.place[0][s.id], b = state.place[1][s.id];
-      if (a && b) { both++; if (a === b) same++; }
-    });
-    $('#agree').textContent = both
-      ? nameOf(0) + ' and ' + nameOf(1) + ' have both sorted ' + both + ' songs and put ' + same + ' in the same tier.'
-      : '';
+    const people = [];
+    state.place.forEach((p, i) => { if (Object.keys(p).length) people.push(i); });
+    let text = '';
+    if (people.length >= 2) {
+      let all = 0, same = 0;
+      songs.forEach((s) => {
+        const ts = people.map((i) => state.place[i][s.id]);
+        if (ts.every(Boolean)) { all++; if (ts.every((t) => t === ts[0])) same++; }
+      });
+      if (all) {
+        text = people.length === 2
+          ? nameOf(people[0]) + ' and ' + nameOf(people[1]) + ' have both sorted ' + all + ' songs and put ' + same + ' in the same tier.'
+          : people.length + ' people have sorted songs. ' + all + ' songs were sorted by everyone, and everyone chose the same tier for ' + same + ' of them.';
+      }
+    }
+    $('#agree').textContent = text;
   }
 
   function renderSendbar() {
@@ -807,19 +892,30 @@
   };
 
   function exportCSV() {
-    const n = [nameOf(0), nameOf(1)];
-    if (n[0].toLowerCase() === n[1].toLowerCase()) n[1] += ' (2)';
-    const head = ['song', 'album', 'year', n[0] + ' tier', n[0] + ' label', n[1] + ' tier', n[1] + ' label', 'difference'];
+    const names = [];
+    state.raters.forEach((r, i) => {
+      const base = nameOf(i);
+      let n = base, k = 2;
+      while (names.some((x) => x.toLowerCase() === n.toLowerCase())) n = base + ' (' + (k++) + ')';
+      names.push(n);
+    });
+    const head = ['song', 'album', 'year'];
+    names.forEach((n) => head.push(n + ' tier', n + ' label'));
+    head.push('difference', 'group average');
     const rows = [head];
     songs.forEach((s) => {
-      const a = state.place[0][s.id] || '';
-      const b = state.place[1][s.id] || '';
-      rows.push([
-        s.title, s.album, s.year || '',
-        a, a ? tierName(a) : '',
-        b, b ? tierName(b) : '',
-        (a && b) ? Math.abs(a - b) : ''
-      ]);
+      const row = [s.title, s.album, s.year || ''];
+      const got = [];
+      state.place.forEach((p) => {
+        const t = p[s.id] || '';
+        row.push(t, t ? tierName(t) : '');
+        if (t) got.push(t);
+      });
+      row.push(
+        got.length > 1 ? Math.max(...got) - Math.min(...got) : '',
+        got.length ? Math.round((got.reduce((a, b) => a + b, 0) / got.length) * 100) / 100 : ''
+      );
+      rows.push(row);
     });
     const csv = '\ufeff' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -865,10 +961,11 @@
 
   function resolveSlot(name) {
     const lower = name.toLowerCase();
-    for (let i = 0; i < 2; i++) if (nameOf(i).toLowerCase() === lower) return i;
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < state.raters.length; i++) if (nameOf(i).toLowerCase() === lower) return i;
+    for (let i = 0; i < state.raters.length; i++) {
       if (!Object.keys(state.place[i]).length) { state.raters[i].name = name; return i; }
     }
+    if (state.raters.length < MAX_PEOPLE) return addPerson(name);
     return -1;
   }
 
@@ -897,7 +994,7 @@
       if (!picks.length) return;
 
       const slot = resolveSlot(col.name);
-      if (slot < 0) { messages.push('Couldn’t match “' + col.name + '”. Rename one of the two people to match, then import again.'); return; }
+      if (slot < 0) { messages.push('Couldn’t add “' + col.name + '” because you already have ' + MAX_PEOPLE + ' people. Remove someone or rename a person to match, then import again.'); return; }
       if (Object.keys(state.place[slot]).length && nameOf(slot).toLowerCase() === col.name.toLowerCase()) {
         const ok = window.confirm('Update ' + nameOf(slot) + '’s results with ' + picks.length + ' songs from this file? Songs in the file replace the ones you already sorted.');
         if (!ok) return;
@@ -911,6 +1008,7 @@
     });
 
     save();
+    buildRaters();
     refreshAlbumSelect();
     render();
     note(messages.length ? messages.join(' ') : 'No sorted songs found in that file.');
@@ -985,7 +1083,7 @@
     const name = ($('#incomingName').value.trim() || incoming.n || 'Friend').slice(0, 16);
     const slot = resolveSlot(name);
     if (slot < 0) {
-      note('Both spots are already in use. Type the name of one of them in “Save as” to update it.');
+      note('You already have ' + MAX_PEOPLE + ' people. Type one of their names in “Save as” to update that person, or remove someone first.');
       return;
     }
     const picks = [];
@@ -1009,6 +1107,7 @@
     state.active = slot;
     selected = null;
     save();
+    buildRaters();
     refreshAlbumSelect();
     render();
     clearIncoming();
@@ -1016,6 +1115,18 @@
   }
 
   /* ---------- Buttons ---------- */
+  $('#addPersonBtn').addEventListener('click', () => {
+    if (state.raters.length >= MAX_PEOPLE) return;
+    const i = addPerson('Person ' + (state.raters.length + 1));
+    state.active = i;
+    selected = null;
+    save();
+    buildRaters();
+    render();
+    const input = document.querySelector('.rater[data-i="' + i + '"] input');
+    input.focus();
+    input.select();
+  });
   $('#shareBtn').addEventListener('click', copyShareLink);
   $('#acceptBtn').addEventListener('click', acceptIncoming);
   $('#dismissBtn').addEventListener('click', clearIncoming);
