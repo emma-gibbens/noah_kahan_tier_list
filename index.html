@@ -1,0 +1,912 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sort Noah Kahan</title>
+<meta name="description" content="Drag every Noah Kahan song into four tiers, sort alongside a friend, and export the results as a CSV.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light dark;
+    --fog: #E3E6E1;
+    --birch: #F4F5F1;
+    --chip: #FFFFFF;
+    --ink: #22302B;
+    --ink-soft: #5B645E;
+    --line: #C5CBC2;
+    --blaze: #F2540F;
+
+    --t1: #22302B; --t1-ink: #F4F5F1;
+    --t2: #5F7A55; --t2-ink: #FFFFFF;
+    --t3: #A9B79A; --t3-ink: #1B241F;
+    --t4: #7A6650; --t4-ink: #F4F5F1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fog: #151A18;
+      --birch: #1E2522;
+      --chip: #2A332F;
+      --ink: #E7EBE4;
+      --ink-soft: #A3ADA5;
+      --line: #38423D;
+      --t1: #2F4A3F; --t1-ink: #E7EBE4;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  body {
+    margin: 0;
+    background: var(--fog);
+    color: var(--ink);
+    font: 16px/1.45 Figtree, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  /* ---------- Header ---------- */
+  .top {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 28px;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 20px clamp(16px, 3vw, 32px) 14px;
+  }
+  h1 {
+    margin: 0;
+    font: 400 clamp(1.7rem, 3.4vw, 2.3rem)/1.05 "Alfa Slab One", Georgia, serif;
+  }
+  .sub { margin: 6px 0 0; color: var(--ink-soft); max-width: 46ch; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .raters { display: flex; align-items: center; gap: 8px; }
+  .raters .lbl { color: var(--ink-soft); font-size: .9rem; }
+  .rater {
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .rater.on { background: var(--ink); }
+  .rater input {
+    font: inherit;
+    font-weight: 600;
+    width: 11ch;
+    text-align: center;
+    background: transparent;
+    border: 0;
+    color: var(--ink);
+    padding: 5px 8px;
+    cursor: pointer;
+    text-overflow: ellipsis;
+  }
+  .rater.on input { color: var(--fog); }
+  .rater input:focus-visible { outline: 2px solid var(--blaze); outline-offset: 2px; border-radius: 999px; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn {
+    font: inherit;
+    font-weight: 600;
+    font-size: .9rem;
+    color: var(--ink);
+    background: transparent;
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+    padding: 7px 13px;
+    cursor: pointer;
+  }
+  .btn.primary { background: var(--ink); color: var(--fog); }
+  .btn:focus-visible, .sendbtn:focus-visible { outline: 2px solid var(--blaze); outline-offset: 2px; }
+
+  .status { padding: 0 clamp(16px, 3vw, 32px); }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; max-width: 520px; }
+  .bar span { display: block; height: 100%; width: 0; background: var(--t2); }
+  .status p { margin: 6px 0 0; font-size: .92rem; }
+  .status .muted { color: var(--ink-soft); }
+  .note { min-height: 1.4em; color: var(--ink-soft); }
+
+  /* ---------- Workspace ---------- */
+  .work {
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+    padding: 14px clamp(16px, 3vw, 32px) 120px;
+  }
+  .pool {
+    position: sticky;
+    top: 12px;
+    max-height: calc(100vh - 24px);
+    overflow: auto;
+    background: var(--birch);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 6px 14px 14px;
+  }
+  .pool-head { display: flex; align-items: baseline; justify-content: space-between; padding-top: 10px; }
+  .pool h2 { margin: 0; font-size: 1.1rem; font-weight: 700; }
+  .pool-count { color: var(--ink-soft); font-size: .9rem; }
+
+  .album h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 16px 0 7px;
+    font-size: .95rem;
+    font-weight: 600;
+  }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--album); flex: none; }
+  .album .yr { color: var(--ink-soft); font-weight: 400; }
+  .album .left { margin-left: auto; color: var(--ink-soft); font-weight: 400; font-size: .85rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .done { margin: 16px 0 4px; color: var(--ink-soft); }
+
+  .add { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .add summary { cursor: pointer; font-weight: 600; font-size: .92rem; }
+  .addform { display: grid; gap: 8px; margin-top: 10px; }
+  .addform label { display: grid; gap: 3px; font-size: .85rem; color: var(--ink-soft); }
+  .addform input, .addform select {
+    font: inherit;
+    color: var(--ink);
+    background: var(--chip);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 9px;
+  }
+  .addform .btn { justify-self: start; }
+
+  .bins { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .bin {
+    display: flex;
+    flex-direction: column;
+    min-height: 200px;
+    background: var(--birch);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .t1 { --tier: var(--t1); --tier-ink: var(--t1-ink); }
+  .t2 { --tier: var(--t2); --tier-ink: var(--t2-ink); }
+  .t3 { --tier: var(--t3); --tier-ink: var(--t3-ink); }
+  .t4 { --tier: var(--t4); --tier-ink: var(--t4-ink); }
+
+  .bin-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--tier);
+    color: var(--tier-ink);
+  }
+  .bin-name {
+    flex: 1;
+    min-width: 0;
+    font: 400 1.3rem/1.2 "Alfa Slab One", Georgia, serif;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    padding: 2px 4px;
+  }
+  .bin-name:focus-visible { outline: 2px solid var(--blaze); outline-offset: 1px; }
+  .count { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .bin-body {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 6px;
+    padding: 10px;
+  }
+  .bin-body:empty::before { content: "Drop songs here"; color: var(--ink-soft); font-size: .92rem; }
+  .bin.over, .pool.over { outline: 3px dashed var(--blaze); outline-offset: -3px; }
+
+  /* ---------- Song chips ---------- */
+  .song {
+    font: inherit;
+    font-size: .9rem;
+    line-height: 1.25;
+    text-align: left;
+    color: var(--ink);
+    background: var(--chip);
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--album, var(--line));
+    border-radius: 6px;
+    padding: 5px 9px 5px 8px;
+    cursor: grab;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .song:hover { border-color: var(--ink-soft); border-left-color: var(--album); }
+  .song.selected { outline: 2px solid var(--blaze); outline-offset: 1px; }
+  .song:focus-visible { outline: 2px solid var(--blaze); outline-offset: 2px; }
+  .song.dragging { opacity: .3; }
+  .ghost {
+    position: fixed;
+    z-index: 1000;
+    margin: 0;
+    pointer-events: none;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .28);
+    transform: rotate(-2deg);
+  }
+  body.is-dragging, body.is-dragging * { cursor: grabbing !important; -webkit-user-select: none; user-select: none; }
+
+  /* ---------- Send bar (tap-to-sort) ---------- */
+  .sendbar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 50;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 10px clamp(12px, 3vw, 32px) calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--birch);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -8px 20px rgba(0, 0, 0, .15);
+  }
+  .sendbar .which { margin: 0; }
+  .sendbtns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sendbtn {
+    font: inherit;
+    font-weight: 600;
+    font-size: .9rem;
+    color: var(--tier-ink, var(--ink));
+    background: var(--tier, transparent);
+    border: 2px solid var(--tier, var(--ink));
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  .sendbtn.plain { color: var(--ink); background: transparent; border-color: var(--ink-soft); }
+  .sendbtn.current { box-shadow: 0 0 0 2px var(--birch), 0 0 0 4px var(--ink); }
+
+  .foot { padding: 0 clamp(16px, 3vw, 32px) 28px; color: var(--ink-soft); font-size: .85rem; max-width: 70ch; }
+
+  @media (max-width: 860px) {
+    .work { grid-template-columns: 1fr; }
+    .bins { order: 1; }
+    .pool { order: 2; position: static; max-height: none; }
+  }
+  @media (max-width: 520px) {
+    .bins { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="titles">
+    <h1>Sort Noah Kahan</h1>
+    <p class="sub">Drag each song into the tier that fits how you feel about it. On a phone, press and hold to drag, or just tap a song and pick a tier.</p>
+  </div>
+  <div class="controls">
+    <div class="raters" role="group" aria-label="Whose results you are sorting">
+      <span class="lbl">Sorting as</span>
+      <div class="rater" data-i="0"><input type="text" maxlength="16" aria-label="Name of person 1"></div>
+      <div class="rater" data-i="1"><input type="text" maxlength="16" aria-label="Name of person 2"></div>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn primary" id="exportBtn">Export CSV</button>
+      <button type="button" class="btn" id="importBtn">Import CSV</button>
+      <button type="button" class="btn" id="resetBtn">Start over</button>
+      <input type="file" id="importFile" accept=".csv,text/csv" hidden>
+    </div>
+  </div>
+</header>
+
+<section class="status" aria-label="Progress">
+  <div class="bar" aria-hidden="true"><span id="barFill"></span></div>
+  <p id="progress"></p>
+  <p id="agree" class="muted"></p>
+  <p id="note" class="note" role="status" aria-live="polite"></p>
+</section>
+
+<main class="work">
+  <aside class="pool" id="pool" data-drop="pool" aria-label="Unsorted songs">
+    <div class="pool-head">
+      <h2>Unsorted</h2>
+      <span class="pool-count" id="poolCount"></span>
+    </div>
+    <div id="poolList"></div>
+    <details class="add">
+      <summary>Missing a song?</summary>
+      <div class="addform">
+        <label>Title <input type="text" id="addTitle" maxlength="80" autocomplete="off"></label>
+        <label>Album <select id="addAlbum"></select></label>
+        <button type="button" class="btn" id="addBtn">Add song</button>
+      </div>
+    </details>
+  </aside>
+  <div class="bins" id="bins"></div>
+</main>
+
+<div class="sendbar" id="sendbar" role="region" aria-label="Move the selected song" hidden>
+  <p class="which"><strong id="selTitle"></strong> goes in</p>
+  <div class="sendbtns" id="sendbtns"></div>
+</div>
+
+<p class="foot">Track lists are compiled from public sources and may be missing a song or two. Use “Missing a song?” to add anything you notice. Your sorting is saved in this browser. This is a fan project and isn’t affiliated with Noah Kahan.</p>
+
+<noscript><p class="foot">This page needs JavaScript to run.</p></noscript>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ------------------------------------------------------------------
+     Song data. Edit this list to add, remove or rename songs.
+     Each song is listed once, under the release it first appeared on.
+  ------------------------------------------------------------------ */
+  const BASE = [
+    { album: 'Hurt Somebody EP', year: 2018, songs: ['Catastrophize', 'Passenger', 'Please'] },
+    { album: 'Busyhead', year: 2019, songs: ['False Confidence', 'Mess', 'Hurt Somebody', 'Young Blood', 'Busyhead', 'Cynic', 'Save Me', 'Sink', 'Tidal', 'Carlo’s Song'] },
+    { album: 'Cape Elizabeth EP', year: 2020, songs: ['A Troubled Mind', 'Close Behind', 'Glue Myself Shut', 'Anyway', 'Maine'] },
+    { album: 'I Was / I Am', year: 2021, songs: ['Part of Me', 'Animal', 'Caves', 'Bad Luck', 'Godlight', 'Someone Like You', 'Fear of Water', 'Hollow', 'Bury Me', 'Howling'] },
+    { album: 'Stick Season', year: 2022, songs: ['Northern Attitude', 'Stick Season', 'All My Love', 'She Calls Me Back', 'Come Over', 'New Perspective', 'Everywhere, Everything', 'Orange Juice', 'Strawberry Wine', 'Growing Sideways', 'Halloween', 'Homesick', 'Still', 'The View Between Villages'] },
+    { album: 'Stick Season (We’ll All Be Here Forever)', year: 2023, songs: ['Your Needs, My Needs', 'Dial Drunk', 'Paul Revere', 'No Complaints', 'Call Your Mom', 'You’re Gonna Go Far'] },
+    { album: 'Stick Season (Forever)', year: 2024, songs: ['Forever'] },
+    { album: 'The Great Divide', year: 2026, songs: ['End of August', 'Doors', 'American Cars', 'Downfall', 'Paid Time Off', 'The Great Divide', 'Haircut', 'Willing and Able', 'Dashboard', '23', 'Porch Light', 'Deny Deny Deny', 'Headed North', 'We Go Way Back', 'Spoiled', 'All Them Horses', 'Dan'] },
+    { album: 'The Great Divide: The Last of the Bugs', year: 2026, songs: ['Lighthouse', 'Staying Still', 'A Few of Your Own', 'Orbiter'] },
+    { album: 'Singles and one-offs', year: null, songs: ['Fine', 'Hallelujah', 'Hold It Down', 'Come Down', 'Pride (with mxmtoon)', 'If We Were Vampires (with Wesley Schultz)', 'Sarah’s Place (with Zach Bryan)'] }
+  ];
+
+  const PALETTE = ['#B5651D', '#4F7CAC', '#8F5B8C', '#5A8F6A', '#C2A03A', '#A64B4B', '#3E8E8E', '#7A7F3A', '#6C6FB0', '#8C7B6B', '#B0577A'];
+  const DEFAULT_TIERS = ['Forever', 'Keepers', 'Fine', 'Skip'];
+  const STORE = 'nk-tier-sorter-v1';
+
+  /* ---------- State ---------- */
+  function defaults() {
+    return { raters: [{ name: 'You' }, { name: 'Friend' }], active: 0, tiers: DEFAULT_TIERS.slice(), place: [{}, {}], custom: [] };
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE));
+      if (s && Array.isArray(s.raters) && s.raters.length === 2 && Array.isArray(s.place) && s.place.length === 2) {
+        const d = defaults();
+        const merged = Object.assign(d, s);
+        if (!Array.isArray(merged.tiers) || merged.tiers.length !== 4) merged.tiers = DEFAULT_TIERS.slice();
+        if (!Array.isArray(merged.custom)) merged.custom = [];
+        return merged;
+      }
+    } catch (e) { /* fall through */ }
+    return defaults();
+  }
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+  }
+  const state = load();
+
+  let songs = [];
+  let byId = new Map();
+  let albumNames = [];
+  let albumMeta = new Map();
+  let selected = null;
+
+  const $ = (sel) => document.querySelector(sel);
+  const slug = (s) => String(s).toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+  function buildSongs() {
+    songs = [];
+    byId = new Map();
+    albumNames = [];
+    albumMeta = new Map();
+    const add = (title, album, year) => {
+      const id = slug(album) + '::' + slug(title);
+      if (byId.has(id)) return null;
+      const s = { id, title, album, year: year || null };
+      songs.push(s);
+      byId.set(id, s);
+      if (!albumMeta.has(album)) {
+        albumMeta.set(album, { name: album, year: s.year, color: PALETTE[albumNames.length % PALETTE.length] });
+        albumNames.push(album);
+      }
+      return s;
+    };
+    BASE.forEach((a) => a.songs.forEach((t) => add(t, a.album, a.year)));
+    state.custom.forEach((c) => add(c.title, c.album, c.year));
+    songs.sort((a, b) => albumNames.indexOf(a.album) - albumNames.indexOf(b.album));
+  }
+
+  const nameOf = (i) => state.raters[i].name.trim() || ('Person ' + (i + 1));
+  const tierName = (t) => state.tiers[t - 1].trim() || DEFAULT_TIERS[t - 1];
+
+  /* ---------- Build static DOM ---------- */
+  function initDOM() {
+    const bins = $('#bins');
+    for (let t = 1; t <= 4; t++) {
+      const sec = document.createElement('section');
+      sec.className = 'bin t' + t;
+      sec.id = 'bin' + t;
+      sec.dataset.drop = String(t);
+      sec.setAttribute('role', 'group');
+      sec.setAttribute('aria-label', 'Tier ' + t);
+      sec.innerHTML =
+        '<header class="bin-head">' +
+          '<input class="bin-name" type="text" maxlength="22" aria-label="Name of tier ' + t + '">' +
+          '<span class="count" aria-label="songs in this tier"></span>' +
+        '</header>' +
+        '<div class="bin-body"></div>';
+      bins.appendChild(sec);
+      sec.querySelector('.bin-name').addEventListener('input', (e) => {
+        state.tiers[t - 1] = e.target.value;
+        save();
+        renderSendbar();
+      });
+    }
+    document.querySelectorAll('.rater').forEach((el) => {
+      const i = Number(el.dataset.i);
+      const input = el.querySelector('input');
+      input.addEventListener('input', () => { state.raters[i].name = input.value; save(); renderStatus(); renderSendbar(); });
+      el.addEventListener('click', () => setActive(i));
+      input.addEventListener('focus', () => setActive(i));
+    });
+    refreshAlbumSelect();
+  }
+
+  function refreshAlbumSelect() {
+    const sel = $('#addAlbum');
+    const keep = sel.value;
+    sel.replaceChildren();
+    albumNames.forEach((n) => {
+      const o = document.createElement('option');
+      o.value = n; o.textContent = n;
+      sel.appendChild(o);
+    });
+    if (!albumMeta.has('Other')) {
+      const o = document.createElement('option');
+      o.value = 'Other'; o.textContent = 'Other';
+      sel.appendChild(o);
+    }
+    if (keep) sel.value = keep;
+  }
+
+  function setActive(i) {
+    if (state.active === i) return;
+    state.active = i;
+    selected = null;
+    save();
+    render();
+  }
+
+  /* ---------- Rendering ---------- */
+  function chip(s) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'song' + (selected === s.id ? ' selected' : '');
+    b.dataset.id = s.id;
+    b.style.setProperty('--album', albumMeta.get(s.album).color);
+    b.setAttribute('aria-pressed', selected === s.id ? 'true' : 'false');
+    b.title = s.album + (s.year ? ' (' + s.year + ')' : '');
+    b.textContent = s.title;
+    return b;
+  }
+
+  function render() {
+    const place = state.place[state.active];
+
+    document.querySelectorAll('.rater').forEach((el) => {
+      const i = Number(el.dataset.i);
+      el.classList.toggle('on', i === state.active);
+      const input = el.querySelector('input');
+      if (document.activeElement !== input) input.value = state.raters[i].name;
+    });
+
+    for (let t = 1; t <= 4; t++) {
+      const bin = $('#bin' + t);
+      const items = songs.filter((s) => place[s.id] === t);
+      bin.querySelector('.bin-body').replaceChildren(...items.map(chip));
+      bin.querySelector('.count').textContent = items.length;
+      const input = bin.querySelector('.bin-name');
+      if (document.activeElement !== input) input.value = state.tiers[t - 1];
+    }
+
+    const list = $('#poolList');
+    list.replaceChildren();
+    let remaining = 0;
+    albumNames.forEach((name) => {
+      const left = songs.filter((s) => s.album === name && !place[s.id]);
+      if (!left.length) return;
+      remaining += left.length;
+      const meta = albumMeta.get(name);
+      const sec = document.createElement('section');
+      sec.className = 'album';
+      sec.style.setProperty('--album', meta.color);
+      sec.innerHTML = '<h3><span class="swatch"></span><span class="nm"></span><span class="yr"></span><span class="left"></span></h3><div class="chips"></div>';
+      sec.querySelector('.nm').textContent = name;
+      sec.querySelector('.yr').textContent = meta.year || '';
+      sec.querySelector('.left').textContent = left.length + ' left';
+      sec.querySelector('.chips').replaceChildren(...left.map(chip));
+      list.appendChild(sec);
+    });
+    if (!remaining) {
+      const p = document.createElement('p');
+      p.className = 'done';
+      p.textContent = 'Every song is sorted. Export the CSV when you’re ready.';
+      list.appendChild(p);
+    }
+    $('#poolCount').textContent = remaining + ' of ' + songs.length;
+
+    renderStatus();
+    renderSendbar();
+  }
+
+  function renderStatus() {
+    const place = state.place[state.active];
+    const done = songs.filter((s) => place[s.id]).length;
+    $('#progress').textContent = done + ' of ' + songs.length + ' songs sorted for ' + nameOf(state.active);
+    $('#barFill').style.width = (songs.length ? (done / songs.length) * 100 : 0) + '%';
+
+    let both = 0, same = 0;
+    songs.forEach((s) => {
+      const a = state.place[0][s.id], b = state.place[1][s.id];
+      if (a && b) { both++; if (a === b) same++; }
+    });
+    $('#agree').textContent = both
+      ? nameOf(0) + ' and ' + nameOf(1) + ' have both sorted ' + both + ' songs and put ' + same + ' in the same tier.'
+      : '';
+  }
+
+  function renderSendbar() {
+    const bar = $('#sendbar');
+    if (!selected || !byId.has(selected)) { selected = null; bar.hidden = true; return; }
+    const s = byId.get(selected);
+    const cur = state.place[state.active][selected];
+    $('#selTitle').textContent = s.title;
+    const box = $('#sendbtns');
+    box.replaceChildren();
+    for (let t = 1; t <= 4; t++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sendbtn t' + t + (cur === t ? ' current' : '');
+      b.textContent = tierName(t);
+      b.setAttribute('aria-keyshortcuts', String(t));
+      b.addEventListener('click', () => move(selected, t));
+      box.appendChild(b);
+    }
+    if (cur) {
+      const u = document.createElement('button');
+      u.type = 'button'; u.className = 'sendbtn plain'; u.textContent = 'Back to unsorted';
+      u.addEventListener('click', () => move(selected, null));
+      box.appendChild(u);
+    }
+    const c = document.createElement('button');
+    c.type = 'button'; c.className = 'sendbtn plain'; c.textContent = 'Cancel';
+    c.addEventListener('click', () => setSelected(null));
+    box.appendChild(c);
+    bar.hidden = false;
+  }
+
+  let noteTimer = null;
+  function note(msg) {
+    const el = $('#note');
+    el.textContent = msg;
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => { el.textContent = ''; }, 5000);
+  }
+
+  /* ---------- Moving songs ---------- */
+  function move(id, tier, opts) {
+    const s = byId.get(id);
+    if (!s) return;
+    const place = state.place[state.active];
+    if (tier) place[id] = tier; else delete place[id];
+    selected = null;
+    save();
+    render();
+    note(tier ? s.title + ' moved to ' + tierName(tier) + '.' : s.title + ' is back in unsorted.');
+    if (opts && opts.focus) {
+      const el = document.querySelector('.song[data-id="' + id + '"]');
+      if (el) el.focus();
+    }
+  }
+
+  function setSelected(id) {
+    selected = id;
+    document.querySelectorAll('.song').forEach((el) => {
+      const on = el.dataset.id === id;
+      el.classList.toggle('selected', on);
+      el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    renderSendbar();
+  }
+
+  /* ---------- Drag and drop (mouse, touch, pen) ---------- */
+  let drag = null;
+  let suppressClick = false;
+
+  document.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const el = e.target.closest('.song');
+    if (!el) return;
+    drag = {
+      id: el.dataset.id, el, sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY,
+      touch: e.pointerType !== 'mouse', active: false, timer: null, ghost: null, ox: 0, oy: 0
+    };
+    if (drag.touch) {
+      // Touch needs a short press so the page can still scroll.
+      drag.timer = setTimeout(() => { if (drag && !drag.active) startDrag(); }, 220);
+    }
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    drag.x = e.clientX; drag.y = e.clientY;
+    if (!drag.active) {
+      const d = Math.hypot(drag.x - drag.sx, drag.y - drag.sy);
+      if (drag.touch) { if (d > 10) endDrag(); }
+      else if (d > 5) startDrag();
+      return;
+    }
+    positionGhost();
+    updateOver();
+  });
+
+  window.addEventListener('pointerup', () => {
+    if (!drag) return;
+    if (drag.active) {
+      const target = dropTarget();
+      const id = drag.id;
+      endDrag();
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 0);
+      if (target) move(id, target === 'pool' ? null : Number(target));
+    } else {
+      endDrag();
+    }
+  });
+
+  window.addEventListener('pointercancel', () => { if (drag) endDrag(); });
+
+  // Once a drag is live, stop the page from scrolling under the finger.
+  window.addEventListener('touchmove', (e) => { if (drag && drag.active) e.preventDefault(); }, { passive: false });
+  document.addEventListener('contextmenu', (e) => { if (e.target.closest('.song')) e.preventDefault(); });
+
+  function startDrag() {
+    const r = drag.el.getBoundingClientRect();
+    drag.ox = drag.sx - r.left;
+    drag.oy = drag.sy - r.top;
+    const g = drag.el.cloneNode(true);
+    g.classList.add('ghost');
+    g.classList.remove('selected');
+    g.setAttribute('aria-hidden', 'true');
+    g.style.width = r.width + 'px';
+    document.body.appendChild(g);
+    drag.ghost = g;
+    drag.active = true;
+    drag.el.classList.add('dragging');
+    document.body.classList.add('is-dragging');
+    positionGhost();
+    updateOver();
+    requestAnimationFrame(autoscroll);
+    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* ignore */ } }
+  }
+
+  function endDrag() {
+    if (!drag) return;
+    clearTimeout(drag.timer);
+    if (drag.ghost) drag.ghost.remove();
+    drag.el.classList.remove('dragging');
+    document.body.classList.remove('is-dragging');
+    document.querySelectorAll('.over').forEach((n) => n.classList.remove('over'));
+    drag = null;
+  }
+
+  function positionGhost() {
+    drag.ghost.style.left = (drag.x - drag.ox) + 'px';
+    drag.ghost.style.top = (drag.y - drag.oy) + 'px';
+  }
+
+  function dropTarget() {
+    const el = document.elementFromPoint(drag.x, drag.y);
+    const zone = el && el.closest('[data-drop]');
+    return zone ? zone.dataset.drop : null;
+  }
+
+  function updateOver() {
+    const target = dropTarget();
+    document.querySelectorAll('[data-drop]').forEach((z) => {
+      z.classList.toggle('over', z.dataset.drop === target);
+    });
+  }
+
+  function autoscroll() {
+    if (!drag || !drag.active) return;
+    const edge = 90;
+    let dy = 0;
+    if (drag.y < edge) dy = -Math.ceil((edge - drag.y) / 6);
+    else if (drag.y > window.innerHeight - edge) dy = Math.ceil((drag.y - (window.innerHeight - edge)) / 6);
+    if (dy) { window.scrollBy(0, dy); updateOver(); }
+    requestAnimationFrame(autoscroll);
+  }
+
+  /* ---------- Tap and keyboard sorting ---------- */
+  document.addEventListener('click', (e) => {
+    if (suppressClick) return;
+    const el = e.target.closest('.song');
+    if (!el) return;
+    setSelected(selected === el.dataset.id ? null : el.dataset.id);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!selected || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target.matches('input, textarea, select')) return;
+    if (/^[1-4]$/.test(e.key)) { e.preventDefault(); move(selected, Number(e.key), { focus: true }); }
+    else if (e.key === '0' || e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); move(selected, null, { focus: true }); }
+    else if (e.key === 'Escape') { setSelected(null); }
+  });
+
+  /* ---------- Add a missing song ---------- */
+  function addCustom(title, album, year) {
+    const id = slug(album) + '::' + slug(title);
+    if (byId.has(id)) return null;
+    state.custom.push({ title, album, year: year || null });
+    buildSongs();
+    return byId.get(id);
+  }
+
+  $('#addBtn').addEventListener('click', () => {
+    const title = $('#addTitle').value.trim();
+    if (!title) { note('Type a song title first.'); $('#addTitle').focus(); return; }
+    const album = $('#addAlbum').value || 'Other';
+    const meta = albumMeta.get(album);
+    const s = addCustom(title, album, meta ? meta.year : null);
+    if (!s) { note('That song is already in the list.'); return; }
+    save();
+    refreshAlbumSelect();
+    $('#addTitle').value = '';
+    render();
+    note('Added ' + title + ' under ' + album + '.');
+  });
+  $('#addTitle').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#addBtn').click(); });
+
+  /* ---------- CSV export ---------- */
+  const csvCell = (v) => {
+    v = (v === null || v === undefined) ? '' : String(v);
+    return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  };
+
+  function exportCSV() {
+    const n = [nameOf(0), nameOf(1)];
+    if (n[0].toLowerCase() === n[1].toLowerCase()) n[1] += ' (2)';
+    const head = ['song', 'album', 'year', n[0] + ' tier', n[0] + ' label', n[1] + ' tier', n[1] + ' label', 'difference'];
+    const rows = [head];
+    songs.forEach((s) => {
+      const a = state.place[0][s.id] || '';
+      const b = state.place[1][s.id] || '';
+      rows.push([
+        s.title, s.album, s.year || '',
+        a, a ? tierName(a) : '',
+        b, b ? tierName(b) : '',
+        (a && b) ? Math.abs(a - b) : ''
+      ]);
+    });
+    const csv = '\ufeff' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'noah-kahan-tiers.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    note('Exported noah-kahan-tiers.csv.');
+  }
+
+  /* ---------- CSV import ---------- */
+  function parseCSV(text) {
+    text = text.replace(/^\ufeff/, '');
+    const rows = [];
+    let row = [], field = '', quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (quoted) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; } else quoted = false;
+        } else field += c;
+      } else if (c === '"') quoted = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c !== '\r') field += c;
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  function findSong(title, album) {
+    if (album) {
+      const exact = byId.get(slug(album) + '::' + slug(title));
+      if (exact) return exact;
+    }
+    const matches = songs.filter((s) => slug(s.title) === slug(title));
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function resolveSlot(name) {
+    const lower = name.toLowerCase();
+    for (let i = 0; i < 2; i++) if (nameOf(i).toLowerCase() === lower) return i;
+    for (let i = 0; i < 2; i++) {
+      if (!Object.keys(state.place[i]).length) { state.raters[i].name = name; return i; }
+    }
+    return -1;
+  }
+
+  function importCSV(text) {
+    const rows = parseCSV(text).filter((r) => r.some((c) => c.trim()));
+    if (rows.length < 2) { note('That file has no rows to import.'); return; }
+    const head = rows[0].map((h) => h.trim());
+    const idx = (name) => head.findIndex((h) => h.toLowerCase() === name);
+    const iSong = idx('song'), iAlbum = idx('album'), iYear = idx('year');
+    const tierCols = [];
+    head.forEach((h, i) => { if (/ tier$/i.test(h)) tierCols.push({ name: h.replace(/ tier$/i, '').trim(), i }); });
+    if (iSong < 0 || !tierCols.length) {
+      note('That doesn’t look like a CSV exported from this page. It needs a “song” column and a “… tier” column.');
+      return;
+    }
+
+    const messages = [];
+    tierCols.forEach((col) => {
+      const picks = [];
+      rows.slice(1).forEach((r) => {
+        const v = parseInt((r[col.i] || '').trim(), 10);
+        const title = (r[iSong] || '').trim();
+        if (!title || !(v >= 1 && v <= 4)) return;
+        picks.push({ title, album: iAlbum >= 0 ? (r[iAlbum] || '').trim() : '', year: iYear >= 0 ? parseInt(r[iYear], 10) || null : null, tier: v });
+      });
+      if (!picks.length) return;
+
+      const slot = resolveSlot(col.name);
+      if (slot < 0) { messages.push('Couldn’t match “' + col.name + '”. Rename one of the two people to match, then import again.'); return; }
+      if (Object.keys(state.place[slot]).length && nameOf(slot).toLowerCase() === col.name.toLowerCase()) {
+        const ok = window.confirm('Update ' + nameOf(slot) + '’s results with ' + picks.length + ' songs from this file? Songs in the file replace the ones you already sorted.');
+        if (!ok) return;
+      }
+      picks.forEach((p) => {
+        let s = findSong(p.title, p.album);
+        if (!s) s = addCustom(p.title, p.album || 'Other', p.year);
+        if (s) state.place[slot][s.id] = p.tier;
+      });
+      messages.push('Imported ' + picks.length + ' songs for ' + nameOf(slot) + '.');
+    });
+
+    save();
+    refreshAlbumSelect();
+    render();
+    note(messages.length ? messages.join(' ') : 'No sorted songs found in that file.');
+  }
+
+  /* ---------- Buttons ---------- */
+  $('#exportBtn').addEventListener('click', exportCSV);
+  $('#importBtn').addEventListener('click', () => $('#importFile').click());
+  $('#importFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try { importCSV(await file.text()); }
+    catch (err) { note('Couldn’t read that file.'); }
+  });
+  $('#resetBtn').addEventListener('click', () => {
+    const n = Object.keys(state.place[state.active]).length;
+    if (!n) { note(nameOf(state.active) + ' hasn’t sorted anything yet.'); return; }
+    if (window.confirm('Clear all ' + n + ' sorted songs for ' + nameOf(state.active) + '? This can’t be undone.')) {
+      state.place[state.active] = {};
+      selected = null;
+      save();
+      render();
+      note('Cleared ' + nameOf(state.active) + '’s sorting.');
+    }
+  });
+
+  /* ---------- Go ---------- */
+  buildSongs();
+  initDOM();
+  render();
+})();
+</script>
+</body>
+</html>
